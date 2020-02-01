@@ -1,0 +1,1 @@
+deprecated module poyo.test;
