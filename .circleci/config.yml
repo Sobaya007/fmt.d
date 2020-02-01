@@ -1,0 +1,15 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: dlang2/dmd-circleci:2.089.1
+    steps:
+      - checkout
+      - run:
+          name: Test
+          command: dub test
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test

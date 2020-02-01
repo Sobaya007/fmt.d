@@ -1,0 +1,11 @@
+language: d
+sudo: false
+d:
+  - dmd-2.088.1
+  - ldc-1.19.0
+
+script:
+  - dub test -b unittest-cov --compiler=${DC}
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

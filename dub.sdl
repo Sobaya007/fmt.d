@@ -1,0 +1,7 @@
+name "fmt-d"
+description "A minimal D application."
+authors "sobaya"
+copyright "Copyright © 2020, sobaya"
+license "proprietary"
+targetPath "bin"
+dependency "libdparse" version="~>0.13.2"
