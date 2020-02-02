@@ -1567,9 +1567,9 @@ private {
         string result = format!"if (%s)%s"(condition, writeNest(s.thenStatement));
         if (s.elseStatement) {
             if (s.elseStatement.statement && s.elseStatement.statement.statementNoCaseNoDefault.ifStatement)
-                result ~= format!"%selse %s"(braceBreak, write(s.elseStatement));
+                result ~= format!"%selse %s"(result.endsWith("}") ? braceBreak : eol, write(s.elseStatement));
             else
-                result ~= format!"%selse%s"(braceBreak, writeNest(s.elseStatement));
+                result ~= format!"%selse%s"(result.endsWith("}") ? braceBreak : eol, writeNest(s.elseStatement));
         }
         return result;
     }
@@ -1683,9 +1683,9 @@ private {
         string result = format!"%s%s"(write(s.compileCondition), writeNest(s.trueStatement));
         if (s.falseStatement) {
             if (s.falseStatement.statement && s.falseStatement.statement.statementNoCaseNoDefault.conditionalStatement)
-                result ~= format!"%selse %s"(braceBreak, write(s.falseStatement));
+                result ~= format!"%selse %s"(result.endsWith("}") ? braceBreak : eol, write(s.falseStatement));
             else
-                result ~= format!"%selse%s"(braceBreak, writeNest(s.falseStatement));
+                result ~= format!"%selse%s"(result.endsWith("}") ? braceBreak : eol, writeNest(s.falseStatement));
         }
         return result;
     }
