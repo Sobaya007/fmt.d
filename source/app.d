@@ -30,25 +30,4 @@ void main(string[] args) {
     } else {
         formatter.formatSourceCode(stdin.byLine.join("\n").to!string).write;
     }
-
-    // formatter.formatSourceCode(readText("test.d")).writeln;
-    // foreach (e; dirEntries("test", SpanMode.depth)) {
-    //     if (e.to!string.match(ctRegex!`case(\d+)\.d`)) {
-    //         auto a = formatter.formatSourceCode(readText(e).chomp);
-    //         auto b = readText(e.stripExtension ~ "_ans.d").chomp;
-    //         assert(a == b, format!"%s:\n-----\n%s\n----\n%s\n----"(e,a,b));
-    //     }
-    // }
-    // formatter.option.braceStyle = Formatter.BraceStyle.Otbs;
-    // foreach (e; dirEntries("../sbylib", SpanMode.depth)) {
-    //     if (e.extension == ".d") {
-    //         if (e.array.canFind("resource")) continue;
-    //         try {
-    //             writeln(formatter.formatSourceCode(readText(e)));
-    //         } catch (Throwable t) {
-    //             writefln("%s:\n-----\n%s", e, readText(e));
-    //             throw t;
-    //         }
-    //     }
-    // }
 }

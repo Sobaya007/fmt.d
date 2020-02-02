@@ -14,3 +14,8 @@ struct S
 {
     double s;
 }
+
+
+// format off
+
+union U { char c; }

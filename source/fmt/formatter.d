@@ -81,7 +81,7 @@ class Formatter {
             } else if (b.type.among(tok!"whitespace", tok!"do", tok!"{", tok!"}")) {
                 bs.popFront();
             } else {
-                assert(false, format!"%s %s"(str(a.type), str(b.type)));
+                assert(false, format!"%s\n%s %s"(resultWithoutComment, str(a.type), str(b.type)));
             }
         }
     
@@ -163,11 +163,11 @@ class Formatter {
             foreach (i, token; tokenList) {
                 if (token.type != tok!"comment") continue;
                 if (token.text.canFind("format off")) {
-                    if (!rs.empty && rs.back.begin >= 0) continue;
+                    if (!rs.empty && rs.back.begin >= 0 && rs.back.end == -1) continue; // nested escape is ignored
                     rs ~= Range(i, -1);
                 }
                 if (token.text.canFind("format on")) {
-                    if (rs.empty) continue;
+                    if (rs.empty) continue; // on without off is ignored
                     rs.back.end = i;
                 }
             }
@@ -440,29 +440,30 @@ private {
     }
     
     string write(const FunctionLiteralExpression e) {
-        string result;
+        string[] result;
         if (e.functionOrDelegate)
             result ~= write(e.functionOrDelegate);
         if (e.isReturnRef)
-            result = [result, "ref"].join(" ");
+            result ~= "ref";
         if (e.returnType)
-            result = [result, write(e.returnType)].join(" ");
+            result ~= write(e.returnType);
         if (e.parameters) {
             result ~= write(e.parameters);
             if (e.memberFunctionAttributes)
-                result ~= format!" %s"(e.memberFunctionAttributes.map!write.join(" "));
+                result ~= e.memberFunctionAttributes.map!write.array;
         }
+        result = result ? [result.join(" ")] : [""];
         if (e.specifiedFunctionBody) {
-            if (result != "")
-                result = format!"%s%s"(result, write(e.specifiedFunctionBody));
+            if (result.front != "")
+                result.front ~= write(e.specifiedFunctionBody);
             else
-                result = write(e.specifiedFunctionBody)[1..$];
+                result.front = write(e.specifiedFunctionBody)[1..$];
         }
         if (write(e.identifier) != "")
-            result ~= write(e.identifier);
+            result.front ~= write(e.identifier);
         if (e.assignExpression)
-            result ~= format!" => %s"(write(e.assignExpression));
-        return result;
+            result.front ~= format!" => %s"(write(e.assignExpression));
+        return result.front;
     }
     
     string write(const ImportExpression e) {
@@ -497,7 +498,7 @@ private {
              result ~= format!" %s"(write(e.constructorArguments));
          if (e.baseClassList)
              result ~= format!" %s"(write(e.baseClassList));
-         result ~= format!" %s%s"(braceBreak, write(e.structBody));
+         result ~= format!"%s%s"(braceBreak, write(e.structBody));
          return result;
     }
     
@@ -519,14 +520,20 @@ private {
     }
     
     string write(const PrimaryExpression e) {
+        // Is this a bug of libdparse ?
+        // typeConstructor is ignored in parsePrimaryExpression
+        Token typeConstructor;
+        if (e.tokens.front.type.among(tok!"immutable", tok!"const", tok!"inout", tok!"shared")) {
+            typeConstructor = e.tokens.front;
+        }
         if (e.identifierOrTemplateInstance) {
             if (write(e.dot) != "")
                 return format!"%s%s"(write(e.dot), write(e.identifierOrTemplateInstance));
             else
                 return format!"%s"(write(e.identifierOrTemplateInstance));
         }
-        if (write(e.typeConstructor) != "")
-            return format!"%s(%s).%s"(write(e.typeConstructor), write(e.type), write(e.primary));
+        if (write(typeConstructor) != "")
+            return format!"%s(%s).%s"(write(typeConstructor), write(e.type), write(e.primary));
         if (write(e.basicType) != "") {
             if (write(e.primary) != "")
                 return format!"%s.%s"(write(e.basicType), write(e.primary));
@@ -602,10 +609,7 @@ private {
     }
     
     string write(const AssocArrayLiteral a) {
-        if (a.keyValuePairs)
-            return format!"[%s]"(write(a.keyValuePairs));
-        else
-            return "[]";
+        return format!"[%s]"(write(a.keyValuePairs));
     }
     
     string write(const KeyValuePairs p) {
@@ -1070,7 +1074,7 @@ private {
         string result = "enum";
         if (d.baseType)
             result ~= format!" : %s"(write(d.baseType));
-        result ~= writeBlock(d.members);
+        result ~= format!"%s{%s}"(braceBreak, writeList(d, d.members).insertIndent);
         return result;
     }
     
@@ -1292,19 +1296,11 @@ private {
         if (d.templateParameters)
             result ~= write(d.templateParameters);
         if (d.constraint)
-            result ~= format!" %s"(write(d.constraint));
+            result ~= format!"%s%s"(eol, write(d.constraint));
         if (d.structBody)
             result ~= format!"%s%s"(braceBreak, write(d.structBody));
         else
             result ~= ";";
-        return result;
-    }
-    
-    string write(const TemplateDeclaration d) {
-        string result = format!"template %s%s"(write(d.name), write(d.templateParameters));
-        if (d.constraint)
-            result ~= format!" %s"(write(d.constraint));
-        result ~= writeBlock(d.declarations);
         return result;
     }
     
@@ -1320,6 +1316,14 @@ private {
             result ~= format!"%s%s"(braceBreak, write(d.structBody));
         else
             result ~= ";";
+        return result;
+    }
+    
+    string write(const TemplateDeclaration d) {
+        string result = format!"template %s%s"(write(d.name), write(d.templateParameters));
+        if (d.constraint)
+            result ~= format!"%s%s"(eol, write(d.constraint));
+        result ~= writeBlock(d.declarations);
         return result;
     }
     
@@ -1392,7 +1396,7 @@ private {
     
     string write(const StructMemberInitializer i) {
         if (write(i.identifier) != "")
-            return format!"%s : %s"(write(i.identifier), write(i.nonVoidInitializer));
+            return format!"%s: %s"(write(i.identifier), write(i.nonVoidInitializer));
         else
             return format!"%s"(write(i.nonVoidInitializer));
     }
@@ -1541,7 +1545,7 @@ private {
     
     string write(const LabeledStatement s) {
         // TODO: label should be always 0 level indented
-        string result = format!"%s:"(s.identifier);
+        string result = format!"%s:"(write(s.identifier));
         if (s.declarationOrStatement)
             result ~= format!" %s"(write(s.declarationOrStatement));
         return result;
@@ -1551,7 +1555,7 @@ private {
         string condition;
         if (s.type) {
             if (s.typeCtors)
-                condition = format!" %s"(s.typeCtors.map!write.join(" "));
+                condition = format!"%s "(s.typeCtors.map!write.join(" "));
             condition ~= format!"%s %s = %s"(write(s.type), write(s.identifier), write(s.expression));
         } else if (s.typeCtors) {
             condition = format!"%s %s = %s"(s.typeCtors.map!write.join(" "), write(s.identifier), write(s.expression));
@@ -1561,8 +1565,12 @@ private {
             condition = write(s.expression);
         }
         string result = format!"if (%s)%s"(condition, writeNest(s.thenStatement));
-        if (s.elseStatement)
-            result ~= format!"%selse%s"(braceBreak, writeNest(s.elseStatement));
+        if (s.elseStatement) {
+            if (s.elseStatement.statement && s.elseStatement.statement.statementNoCaseNoDefault.ifStatement)
+                result ~= format!"%selse %s"(braceBreak, write(s.elseStatement));
+            else
+                result ~= format!"%selse%s"(braceBreak, writeNest(s.elseStatement));
+        }
         return result;
     }
     
@@ -1620,10 +1628,10 @@ private {
     }
     
     string write(const GotoStatement s) {
-         if (write(s.label) != "")
-            return format!"goto %s;"(write(s.label));
         if (s.expression)
             return format!"goto case %s;"(write(s.expression));
+         if (write(s.label) != "")
+            return format!"goto %s;"(write(s.label));
         assert(false);
     }
     
@@ -1847,13 +1855,17 @@ private {
     
     string write(const AsmInstruction i) {
         if (i.hasAlign)
-            return format!"align %s"(write(i.identifierOrIntegerOrOpcode));
+            return format!"align %s;"(write(i.identifierOrIntegerOrOpcode));
         if (i.operands)
-            return format!"%s %s"(write(i.identifierOrIntegerOrOpcode), write(i.operands));
-        if (i.asmInstruction)
-            return format!"%s : %s"(write(i.identifierOrIntegerOrOpcode), write(i.asmInstruction));
+            return format!"%s %s;"(write(i.identifierOrIntegerOrOpcode), write(i.operands));
+        if (i.isLabel) {
+            if (i.asmInstruction)
+                return format!"%s: %s;"(write(i.identifierOrIntegerOrOpcode), write(i.asmInstruction));
+            else
+                return format!"%s:;"(write(i.identifierOrIntegerOrOpcode));
+        }
         if (write(i.identifierOrIntegerOrOpcode) != "")
-            return format!"%s"(write(i.identifierOrIntegerOrOpcode));
+            return format!"%s;"(write(i.identifierOrIntegerOrOpcode));
         return ";";
     }
     
@@ -1983,7 +1995,8 @@ unittest {
         if (e.to!string.match(ctRegex!`case(\d+)\.d`)) {
             auto a = formatter.formatSourceCode(readText(e).chomp);
             auto b = readText(e.stripExtension ~ "_ans.d").chomp;
-            assert(a == b, format!"%s:\n-----\n%s\n----\n%s\n----"(e,a,b));
+            auto tmp = zip(a.split("\n"), b.split("\n")).map!(t => t[0] == t[1] ? tuple(" |"~t[0], " |"~t[1]) : tuple(">|"~t[0], ">|"~t[1])).array;
+            assert(a == b, format!"%s:\n-----\n%s\n----\n%s\n----"(e,tmp.map!(t => t[0]).join("\n"), tmp.map!(t =>t[1]).join("\n")));
         }
     }
 }
